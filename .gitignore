@@ -1,0 +1,13 @@
+# Build outputs
+/output/
+*.o
+*.ko
+Image-*
+
+# Fetched kernel source / kata fragments (build-kernel.sh pulls these)
+*.tar.xz
+linux-*/
+kata/
+
+# OS
+.DS_Store
