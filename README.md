@@ -135,6 +135,8 @@ Patch-level bumps reuse the same overlay via `olddefconfig` with no changes.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The config overlay references upstream Linux
-Kconfig symbols; the Linux kernel itself is GPLv2 and is downloaded at build
-time, not redistributed here.
+Dual-licensed under **MIT OR Apache-2.0** — see [LICENSE-MIT](LICENSE-MIT) and
+[LICENSE-APACHE](LICENSE-APACHE); use whichever you prefer (Apache-2.0 adds an
+explicit patent grant; MIT is GPLv2-compatible). The config overlay references
+upstream Linux Kconfig symbols; the Linux kernel itself is GPLv2 and is
+downloaded at build time, not redistributed here.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
 #
 # Verify the currently installed kernel has the eBPF feature set. Run on the
 # macOS host; it spawns a throwaway container on the active kernel.

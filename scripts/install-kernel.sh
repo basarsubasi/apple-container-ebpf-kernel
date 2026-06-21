@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
 #
 # Install a freshly built kernel into Apple `container`. Run on the macOS host.
 #
