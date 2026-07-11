@@ -82,6 +82,36 @@ LSM that is not built in. `bpf` being present is the part that matters: it is th
 proof that the forced command line took effect. The exact rest of the list varies
 with the kata fragments you build against, so do not treat it as a fingerprint.
 
+## Running BPF programs
+
+Apple's `container` runtime mounts `/sys` and `/proc` but does **not** mount
+`tracefs` or`bpffs`. Without these, tracepoint-based BPF programs
+fail with `error=tracefs not found`.
+
+Run `scripts/setup-bpf-env.sh` inside the container to mount them before loading
+any BPF programs:
+
+```sh
+# one-shot: set up the environment, then run your program
+container run --rm --cap-add ALL \
+  --mount type=bind,source="$PWD/scripts",target=/scripts \
+  debian:trixie sh -c '/scripts/setup-bpf-env.sh && your-bpf-program'
+```
+
+Or in an already-running container:
+
+```sh
+container exec <container> /work/scripts/setup-bpf-env.sh
+# then load / attach your BPF programs as usual
+```
+
+The setup script mounts:
+
+| Filesystem     | Mount point             | Purpose                                |
+| -------------- | ----------------------- | -------------------------------------- |
+| `tracefs`      | `/sys/kernel/tracing`   | Tracepoint/kprobe attachment for BPF   |
+| `bpf`          | `/sys/fs/bpf`           | Pin BPF maps and programs across procs |
+
 ## How it works
 
 The build is a three-way config merge:
@@ -111,6 +141,7 @@ config/ebpf-overlay.conf   the eBPF Kconfig overlay (the core of this repo)
 scripts/build-kernel.sh    build the Image inside a debian:trixie container
 scripts/install-kernel.sh  install the Image into Apple container (host)
 scripts/verify-kernel.sh   probe the running kernel for the feature set (host)
+scripts/setup-bpf-env.sh   mount tracefs/securityfs/bpffs for BPF programs
 docs/build-workflow.md     the end-to-end build, in detail
 docs/troubleshooting.md    the dependency traps and boot pitfalls
 ```
