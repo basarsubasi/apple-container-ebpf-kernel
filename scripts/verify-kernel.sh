@@ -10,7 +10,9 @@ set -euo pipefail
 
 IMAGE="${IMAGE:-docker.io/library/debian:trixie}"
 
-container run --rm "$IMAGE" sh -c '
+# SYS_ADMIN is needed for one thing only: mounting securityfs, without which the
+# active LSM list is unreadable and the `bpf` LSM cannot be verified at all.
+container run --rm --cap-add SYS_ADMIN "$IMAGE" sh -c '
   set -e
   echo "uname:     $(uname -r)"
 
@@ -26,8 +28,12 @@ container run --rm "$IMAGE" sh -c '
     echo "sched_ext: MISSING"
   fi
 
-  # The active LSM list; shows "bpf" only if the forced cmdline took effect.
-  echo "lsm:       $(cat /sys/kernel/security/lsm 2>/dev/null || echo "(securityfs not mounted)")"
+  # The active LSM list; shows "bpf" only if the forced cmdline took effect. The
+  # runtime does not mount securityfs, so mount it here or the list is invisible.
+  # The list contains only LSMs actually built in, so it is a subset of the lsm=
+  # on the command line -- `bpf` being present is what matters.
+  mount -t securityfs securityfs /sys/kernel/security 2>/dev/null || true
+  echo "lsm:       $(cat /sys/kernel/security/lsm 2>/dev/null || echo "(securityfs unavailable; needs CAP_SYS_ADMIN)")"
 
   if ! command -v bpftool >/dev/null 2>&1; then
     apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq bpftool >/dev/null 2>&1 || true

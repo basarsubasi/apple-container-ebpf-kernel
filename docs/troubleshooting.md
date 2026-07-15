@@ -42,7 +42,19 @@ Two separate causes:
   `CONFIG_FUNCTION_ERROR_INJECTION=y` (plus `CONFIG_BPF_KPROBE_OVERRIDE=y`) for
   there to be any attachable functions.
 
-Confirm it worked: `cat /sys/kernel/security/lsm` should list `bpf`.
+Confirm it worked: `/sys/kernel/security/lsm` should list `bpf`. The runtime does
+not mount securityfs, so that file does not exist until you mount it yourself —
+which needs `CAP_SYS_ADMIN`:
+
+```sh
+container run --rm --cap-add SYS_ADMIN docker.io/library/debian:trixie sh -c \
+  'mount -t securityfs securityfs /sys/kernel/security && cat /sys/kernel/security/lsm'
+# -> capability,landlock,bpf
+```
+
+`verify-kernel.sh` does this for you. Note the list only ever contains LSMs that
+are actually built in, so it is a subset of the `lsm=` you forced on the command
+line — `bpf` being there is the thing to check, not an exact match.
 
 ### Forcing the command line can brick the boot
 
@@ -58,6 +70,22 @@ Copy that string verbatim into `CONFIG_CMDLINE`, changing only `lsm=` to append
 `,bpf`. If a runtime upgrade later changes the command line, rebuild with the new
 one. If you don't need the BPF LSM at all, delete the two `CMDLINE` lines from the
 overlay and avoid the risk entirely.
+
+**Do not read `/proc/cmdline` back from the forced kernel to check this.** Once
+`CONFIG_CMDLINE_FORCE` is in effect the kernel ignores what the runtime passed and
+reports `CONFIG_CMDLINE` verbatim, so the check becomes circular: it will happily
+echo a string that no longer matches the runtime. Read it *before* switching (the
+stock kernel does not force anything), or point the runtime at a non-forcing
+kernel first:
+
+```sh
+container system kernel set --binary <stock-or-kata-kernel> --arch arm64 --force
+container system stop && container system start --disable-kernel-install
+container run --rm docker.io/library/debian:trixie cat /proc/cmdline   # the real one
+```
+
+then put your own kernel back the same way. The versions this was last checked
+against are in the README's "Verified with" table.
 
 ## `tar` fails extracting the kernel source
 
@@ -79,8 +107,8 @@ Prefer `container system kernel set --binary <Image>` (a raw image) over the
 
 ## netem says "unavailable" in verify
 
-`tc qdisc … netem …` needs `CAP_NET_ADMIN`. The read-only `verify-kernel.sh`
-checks don't add it; test netem explicitly:
+`tc qdisc … netem …` needs `CAP_NET_ADMIN`, which `verify-kernel.sh` does not add
+(it only takes `SYS_ADMIN`, to mount securityfs). Test netem explicitly:
 
 ```sh
 container run --rm --cap-add NET_ADMIN docker.io/library/debian:trixie sh -c \

@@ -7,7 +7,7 @@ Apple `container` (and most off-the-shelf macOS Linux VMs) ship a kernel that is
 missing the pieces serious eBPF work needs — no BTF, no `sched_ext`, no
 `struct_ops` qdisc, sometimes no `kprobes`/`uprobes` at all. This repo is a small
 config overlay plus three scripts that build a stock Linux stable kernel
-(currently **7.1.1**, arm64) with all of that turned on, and install it into the
+(currently **7.1.3**, arm64) with all of that turned on, and install it into the
 `container` runtime.
 
 ## What you get
@@ -31,10 +31,11 @@ is heavily commented with the rationale and the dependency gotchas.
 
 ## Requirements
 
-- Apple Silicon Mac running macOS.
+- Apple Silicon Mac. Upstream supports `container` on **macOS 26** and states it
+  does not support older releases, so that is the floor here too.
 - [Apple `container`](https://github.com/apple/container) (`brew install container`).
-- ~15 GB free disk and a few minutes (a full build is ~6 minutes on an M-series
-  with 8 jobs).
+- ~15 GB free disk and a few minutes (a full build took **8 minutes** on an M1
+  Max with `-j9`; see [Verified with](#verified-with)).
 - The kernel itself is built **inside a Linux/arm64 build container**
   (`debian:trixie`); you do not need a cross-toolchain on the host.
 
@@ -52,10 +53,10 @@ container run -d --name kbuild --cap-add ALL -c 8 -m 8G \
 # 2. build the kernel (downloads the kernel source + kata config fragments,
 #    merges the overlay, builds arch/arm64/boot/Image)
 container exec kbuild /work/scripts/build-kernel.sh
-#    -> writes /work/output/Image-7.1.1-ebpf
+#    -> writes /work/output/Image-7.1.3-ebpf
 
 # 3. install it into the runtime (host side) and restart keeping the kernel
-./scripts/install-kernel.sh ./output/Image-7.1.1-ebpf
+./scripts/install-kernel.sh ./output/Image-7.1.3-ebpf
 container system start --disable-kernel-install
 
 # 4. verify the feature set on a throwaway container
@@ -65,15 +66,21 @@ container system start --disable-kernel-install
 Expected `verify-kernel.sh` output (abridged):
 
 ```
-uname:     7.1.1-ebpf
-BTF:       present (9672773 bytes)
+uname:     7.1.3-ebpf
+BTF:       present (10877109 bytes)
 sched_ext: present
-lsm:       lockdown,capability,landlock,yama,apparmor,bpf
+lsm:       capability,landlock,bpf
 struct_ops in BTF:
   bpf_struct_ops_Qdisc_ops
   bpf_struct_ops_sched_ext_ops
   bpf_struct_ops_tcp_congestion_ops
 ```
+
+The `lsm:` line lists the LSMs that are **actually active**, which is only ever a
+subset of the `lsm=` on the kernel command line — the kernel silently ignores any
+LSM that is not built in. `bpf` being present is the part that matters: it is the
+proof that the forced command line took effect. The exact rest of the list varies
+with the kata fragments you build against, so do not treat it as a fingerprint.
 
 ## How it works
 
@@ -108,6 +115,39 @@ docs/build-workflow.md     the end-to-end build, in detail
 docs/troubleshooting.md    the dependency traps and boot pitfalls
 ```
 
+## Verified with
+
+Everything below was measured end to end — build, install, boot, verify — on this
+combination. It is not a compatibility claim for anything else.
+
+| Component | Version | How it was checked |
+|---|---|---|
+| macOS | 26.5.2 (25F84), Apple M1 Max | `sw_vers` |
+| Apple `container` | 1.1.0 | `container --version` |
+| `containerization` | 0.35.0 | exact pin of `container` 1.1.0 (`Package.resolved`) |
+| Linux kernel | 7.1.3 (`7.1.3-ebpf`) | built here, then `verify-kernel.sh` |
+| kata fragments | 3.32.0 | `KATA_TAG` default in `build-kernel.sh` |
+| Build | 8 min, `-j9`, 69 MB `Image` | `time make … Image` |
+| Date | 2026-07-15 | |
+
+**Why this table exists, and why it is not decoration.** The overlay sets
+`CONFIG_CMDLINE_FORCE` and bakes the runtime's *entire* kernel command line into
+the image (see the caveat below). That string is the one place this repo is
+coupled to a specific `container` release: if a future version boots with a
+different command line, the forced value goes stale and **the guest stops
+booting**. So the version of `container` this was verified against is load-bearing
+information, not trivia.
+
+On the combination above, the command line the runtime passes is:
+
+```
+console=hvc0 tsc=reliable panic=0 oops=panic lsm=lockdown,capability,landlock,yama,apparmor init=/sbin/vminitd ro rootfstype=ext4 root=/dev/vda
+```
+
+which is exactly `CONFIG_CMDLINE` in the overlay minus the `,bpf` this repo appends
+to `lsm=`. If you are on a newer `container`, re-check that line (see the caveat)
+before trusting this table.
+
 ## Important caveats
 
 - **The new kernel only affects new `container run` instances.** Existing
@@ -120,6 +160,13 @@ docs/troubleshooting.md    the dependency traps and boot pitfalls
   `CONFIG_CMDLINE` in the overlay match it exactly (only adding `,bpf`). A stale
   forced command line will prevent the guest from booting. If you do not need the
   BPF LSM, delete the two `CMDLINE` lines from the overlay.
+- **Read that command line from a kernel that is not already forcing one.** Once
+  you are running the kernel built here, `CONFIG_CMDLINE_FORCE` means the kernel
+  ignores what the runtime passed and reports `CONFIG_CMDLINE` right back at you —
+  so `cat /proc/cmdline` just echoes your own string and will "confirm" a value
+  that is already stale. Check it *before* you switch (on the stock kernel), or
+  temporarily point the runtime at a non-forcing kernel to re-read it after a
+  `container` upgrade.
 - See [`docs/troubleshooting.md`](docs/troubleshooting.md) for the BTF dependency
   chain and other traps.
 
@@ -132,6 +179,18 @@ container exec kbuild env KVER=7.2.0 /work/scripts/build-kernel.sh
 ```
 
 Patch-level bumps reuse the same overlay via `olddefconfig` with no changes.
+
+Note that **7.1.x is a plain stable line, not a longterm one** — it stops getting
+fixes once the next stable line lands, so expect to bump `KVER` periodically
+rather than settling on it. Pick a longterm release instead if you want to sit
+still; the overlay does not care either way.
+
+The kata fragments are pinned separately via `KATA_TAG` (default `3.32.0`), and
+`build-kernel.sh` also applies kata's dax patch from `patches/6.18.x/` if it still
+applies. Both are deliberately pinned rather than tracking `main`: the fragments
+decide what actually survives `olddefconfig`, so an unreviewed bump can silently
+drop an eBPF option. The build asserts the essentials either way and fails loudly
+if one goes missing.
 
 ## License
 
