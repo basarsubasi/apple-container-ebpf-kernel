@@ -28,14 +28,6 @@ container run --rm --cap-add SYS_ADMIN "$IMAGE" sh -c '
     echo "sched_ext: MISSING"
   fi
 
-  # securityfs — needed to read the LSM list
-  if mountpoint -q /sys/kernel/security 2>/dev/null; then
-    echo "securityfs: mounted"
-  elif [ -d /sys/kernel/security ]; then
-    echo "securityfs: present (not mounted — run setup-bpf-env.sh)"
-  else
-    echo "securityfs: MISSING"
-  fi
 
   # bpffs — needed for BPF map pinning
   if mountpoint -q /sys/fs/bpf 2>/dev/null; then
