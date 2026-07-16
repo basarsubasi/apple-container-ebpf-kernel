@@ -28,6 +28,16 @@ container run --rm --cap-add SYS_ADMIN "$IMAGE" sh -c '
     echo "sched_ext: MISSING"
   fi
 
+
+  # bpffs — needed for BPF map pinning
+  if mountpoint -q /sys/fs/bpf 2>/dev/null; then
+    echo "bpffs:      mounted"
+  elif [ -d /sys/fs/bpf ]; then
+    echo "bpffs:      present (not mounted — run setup-bpf-env.sh)"
+  else
+    echo "bpffs:      MISSING"
+  fi
+
   # The active LSM list; shows "bpf" only if the forced cmdline took effect. The
   # runtime does not mount securityfs, so mount it here or the list is invisible.
   # The list contains only LSMs actually built in, so it is a subset of the lsm=
@@ -47,3 +57,4 @@ container run --rm --cap-add SYS_ADMIN "$IMAGE" sh -c '
 '
 echo ">>> netem needs CAP_NET_ADMIN; check it manually with:"
 echo "    container run --rm --cap-add NET_ADMIN $IMAGE sh -c 'tc qdisc add dev lo root netem loss 5% && tc qdisc del dev lo root && echo netem-ok'"
+echo ">>> If tracefs/securityfs/bpffs show 'not mounted', run scripts/setup-bpf-env.sh inside the container first."

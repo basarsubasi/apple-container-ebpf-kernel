@@ -116,3 +116,30 @@ container run --rm --cap-add NET_ADMIN docker.io/library/debian:trixie sh -c \
 ```
 
 (The container image also needs `iproute2` for `tc`.)
+
+## `tracefs not found` (BPF tracepoint programs fail)
+
+```
+WARN failed to attach BPF program program="trace_sys_enter_execve" error=tracefs not found
+```
+
+**Root cause:** Apple's `container` runtime mounts `/sys` and `/proc` but does
+not mount `tracefs`, `securityfs`, or `bpffs`. The kernel has tracing enabled,
+but the filesystem interface is not exposed to userspace.
+
+**Fix:** Run `scripts/setup-bpf-env.sh` inside the container before loading any
+BPF programs that use tracepoints, kprobes, or map pinning:
+
+```sh
+# one-shot
+container run --rm --cap-add ALL \
+  --mount type=bind,source="$PWD/scripts",target=/scripts \
+  debian:trixie sh -c '/scripts/setup-bpf-env.sh && your-bpf-program'
+
+# or inside an already-running container
+container exec <container> /work/scripts/setup-bpf-env.sh
+```
+
+The script mounts `tracefs` at `/sys/kernel/tracing`, `securityfs` at
+`/sys/kernel/security`, and `bpf` at `/sys/fs/bpf`. You need at minimum
+`--cap-add SYS_ADMIN` (or `--cap-add ALL`) for the mounts to succeed.
