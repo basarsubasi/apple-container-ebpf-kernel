@@ -85,7 +85,7 @@ with the kata fragments you build against, so do not treat it as a fingerprint.
 ## Running BPF programs
 
 Apple's `container` runtime mounts `/sys` and `/proc` but does **not** mount
-`tracefs` or`bpffs`. Without these, tracepoint-based BPF programs
+`tracefs`, `securityfs`, or `bpffs`. Without these, tracepoint-based BPF programs
 fail with `error=tracefs not found`.
 
 Run `scripts/setup-bpf-env.sh` inside the container to mount them before loading
@@ -110,6 +110,7 @@ The setup script mounts:
 | Filesystem     | Mount point             | Purpose                                |
 | -------------- | ----------------------- | -------------------------------------- |
 | `tracefs`      | `/sys/kernel/tracing`   | Tracepoint/kprobe attachment for BPF   |
+| `securityfs`   | `/sys/kernel/security`  | Read `/sys/kernel/security/lsm`        |
 | `bpf`          | `/sys/fs/bpf`           | Pin BPF maps and programs across procs |
 
 ## How it works

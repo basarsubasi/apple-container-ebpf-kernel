@@ -19,6 +19,18 @@ else
   exit 1
 fi
 
+
+# securityfs — needed to read /sys/kernel/security/lsm
+if mountpoint -q /sys/kernel/security 2>/dev/null; then
+  echo "securityfs: already mounted"
+elif [ -d /sys/kernel/security ]; then
+  mount -t securityfs securityfs /sys/kernel/security
+  echo "securityfs: mounted"
+else
+  echo "securityfs: FAILED — /sys/kernel/security not found" >&2
+  exit 1
+fi
+
 # bpffs — required for BPF map pinning (pinning to /sys/fs/bpf/...)
 if mountpoint -q /sys/fs/bpf 2>/dev/null; then
   echo "bpffs:      already mounted"
