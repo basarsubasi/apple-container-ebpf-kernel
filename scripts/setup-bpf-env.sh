@@ -6,7 +6,7 @@
 # any BPF programs that use tracepoints, kprobes, or map pinning.
 #
 # Requires SYS_ADMIN capability (or --cap-add ALL).
-set -euo pipefail
+set -eu
 
 # tracefs — required for tracepoint-based BPF program attachment
 if mountpoint -q /sys/kernel/tracing 2>/dev/null; then

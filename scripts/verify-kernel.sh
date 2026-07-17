@@ -57,4 +57,4 @@ container run --rm --cap-add SYS_ADMIN "$IMAGE" sh -c '
 '
 echo ">>> netem needs CAP_NET_ADMIN; check it manually with:"
 echo "    container run --rm --cap-add NET_ADMIN $IMAGE sh -c 'tc qdisc add dev lo root netem loss 5% && tc qdisc del dev lo root && echo netem-ok'"
-echo ">>> If tracefs/securityfs/bpffs show 'not mounted', run scripts/setup-bpf-env.sh inside the container first."
+echo ">>> If bpffs shows 'not mounted', run scripts/setup-bpf-env.sh inside the container first."
